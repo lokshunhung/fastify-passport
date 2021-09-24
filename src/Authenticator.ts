@@ -3,6 +3,7 @@ import { AnyStrategy, SessionStrategy, Strategy } from './strategies'
 import { FastifyRequest, RouteHandlerMethod, FastifyPlugin } from 'fastify'
 import { AuthenticateOptions, AuthenticateCallback, AuthenticationRoute } from './AuthenticationRoute'
 import { CreateInitializePlugin } from './CreateInitializePlugin'
+import { SessionManager } from './session-managers/SessionManager'
 import fastifyPlugin from 'fastify-plugin'
 
 export type SerializeFunction<User = any, SerializedUser = any> = (
@@ -27,7 +28,7 @@ export class Authenticator {
   public key: string
   // the key on the request at which to store the deserialized user value (default: "user")
   public userProperty: string
-  public sessionManager: SecureSessionManager
+  public sessionManager: SessionManager
 
   private strategies: { [k: string]: AnyStrategy } = {}
   private serializers: SerializeFunction<any, any>[] = []
