@@ -4,6 +4,7 @@ import { FastifyRequest, RouteHandlerMethod, FastifyPlugin } from 'fastify'
 import { AuthenticateOptions, AuthenticateCallback, AuthenticationRoute } from './AuthenticationRoute'
 import { CreateInitializePlugin } from './CreateInitializePlugin'
 import { SessionManager } from './session-managers/SessionManager'
+import { FastifySessionManager } from './session-managers/FastifySessionManager'
 import fastifyPlugin from 'fastify-plugin'
 
 export type SerializeFunction<User = any, SerializedUser = any> = (
@@ -28,8 +29,8 @@ export class Authenticator {
   public key: string
   // the key on the request at which to store the deserialized user value (default: "user")
   public userProperty: string
-  public sessionManager: SessionManager
 
+  private _sessionManager: SessionManager | undefined
   private strategies: { [k: string]: AnyStrategy } = {}
   private serializers: SerializeFunction<any, any>[] = []
   private deserializers: DeserializeFunction<any, any>[] = []
@@ -40,7 +41,23 @@ export class Authenticator {
     this.userProperty = options.userProperty || 'user'
 
     this.use(new SessionStrategy(this.deserializeUser.bind(this)))
-    this.sessionManager = new SecureSessionManager({ key: this.key }, this.serializeUser.bind(this))
+    this.serializeUser = this.serializeUser.bind(this)
+  }
+
+  set sessionManager(sessionManager: SessionManager) {
+    if (this._sessionManager) {
+      throw new Error(
+        'Session manager already set, you might be calling passport.secureSession() or passport.session() more than once'
+      )
+    }
+    this._sessionManager = sessionManager
+  }
+
+  get sessionManager(): SessionManager {
+    if (!this._sessionManager) {
+      throw new Error('Session manager not set, please register passport.secureSession() or passport.session() plugin')
+    }
+    return this._sessionManager
   }
 
   use(strategy: AnyStrategy): this
@@ -234,6 +251,18 @@ export class Authenticator {
    * @return {Function} middleware
    */
   public secureSession(options?: AuthenticateOptions): FastifyPlugin {
+    this.sessionManager = new SecureSessionManager({ key: this.key }, this.serializeUser)
+    return fastifyPlugin(async (fastify) => {
+      fastify.addHook('preValidation', new AuthenticationRoute(this, 'session', options).handler)
+    })
+  }
+
+  /**
+   *
+   * @return {Function} middleware
+   */
+  public session(options?: AuthenticateOptions): FastifyPlugin {
+    this.sessionManager = new FastifySessionManager({ key: this.key }, this.serializeUser)
     return fastifyPlugin(async (fastify) => {
       fastify.addHook('preValidation', new AuthenticationRoute(this, 'session', options).handler)
     })
